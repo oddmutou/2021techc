@@ -88,63 +88,91 @@ if (isset($_POST['body']) && !empty($_SESSION['login_user_id'])) {
 
 <script>
 document.addEventListener("DOMContentLoaded", () => {
-  const entryTemplate = document.getElementById('entryTemplate');
-  const entriesRenderArea = document.getElementById('entriesRenderArea');
+  // 最後に描画した投稿のIDを保存しておく変数
+  let lastRenderedEntryId = null;
 
-  const request = new XMLHttpRequest();
-  request.onload = (event) => {
-    const response = event.target.response;
-    response.entries.forEach((entry) => {
-      // テンプレートとするものから要素をコピー
-      const entryCopied = entryTemplate.cloneNode(true);
+  // 投稿を描画する関数
+  const renderEntries = () => {
+    const entryTemplate = document.getElementById('entryTemplate');
+    const entriesRenderArea = document.getElementById('entriesRenderArea');
 
-      // display: none を display: block に書き換える
-      entryCopied.style.display = 'block';
+    const request = new XMLHttpRequest();
+    request.onload = (event) => {
+      const response = event.target.response;
+      response.entries.forEach((entry) => {
+        // テンプレートとするものから要素をコピー
+        const entryCopied = entryTemplate.cloneNode(true);
 
-      // id属性を設定しておく(レスアンカ用)
-      entryCopied.id = 'entry' + entry.id.toString();
+        // display: none を display: block に書き換える
+        entryCopied.style.display = 'block';
 
-      // 番号(ID)を表示
-      entryCopied.querySelector('[data-role="entryIdArea"]').innerText = entry.id.toString();
+        // id属性を設定しておく(レスアンカ用)
+        entryCopied.id = 'entry' + entry.id.toString();
 
-      // アイコン画像が存在する場合は表示 なければimg要素ごと非表示に
-      if (entry.user_icon_file_url.length > 0) {
-        entryCopied.querySelector('[data-role="entryUserIconImage"]').src = entry.user_icon_file_url;
-      } else {
-        entryCopied.querySelector('[data-role="entryUserIconImage"]').display = 'none';
+        // 番号(ID)を表示
+        entryCopied.querySelector('[data-role="entryIdArea"]').innerText = entry.id.toString();
+
+        // アイコン画像が存在する場合は表示 なければimg要素ごと非表示に
+        if (entry.user_icon_file_url.length > 0) {
+          entryCopied.querySelector('[data-role="entryUserIconImage"]').src = entry.user_icon_file_url;
+        } else {
+          entryCopied.querySelector('[data-role="entryUserIconImage"]').display = 'none';
+        }
+
+        // 名前を表示
+        entryCopied.querySelector('[data-role="entryUserNameArea"]').innerText = entry.user_name;
+
+        // 名前のところのリンク先(プロフィール)のURLを設定
+        entryCopied.querySelector('[data-role="entryUserAnchor"]').href = entry.user_profile_url;
+
+        // 投稿日時を表示
+        entryCopied.querySelector('[data-role="entryCreatedAtArea"]').innerText = entry.created_at;
+
+        // 本文を表示 (ここはHTMLなのでinnerHTMLで)
+        entryCopied.querySelector('[data-role="entryBodyArea"]').innerHTML = entry.body;
+
+        // 画像が存在する場合に本文の下部に画像を表示
+        if (entry.image_file_url.length > 0) {
+          const imageElement = new Image();
+          imageElement.src = entry.image_file_url; // 画像URLを設定
+          imageElement.style.display = 'block'; // ブロック要素にする (img要素はデフォルトではインライン要素のため)
+          imageElement.style.marginTop = '1em'; // 画像上部の余白を設定
+          imageElement.style.maxHeight = '300px'; // 画像を表示する最大サイズ(縦)を設定
+          imageElement.style.maxWidth = '300px'; // 画像を表示する最大サイズ(横)を設定
+          entryCopied.querySelector('[data-role="entryBodyArea"]').appendChild(imageElement); // 本文エリアに画像を追加
+        }
+
+        // 最後に実際の描画を行う
+        entriesRenderArea.appendChild(entryCopied);
+      });
+
+      // 最後に描画した投稿のIDを更新
+      lastRenderedEntryId = response.last_rendered_entry_id;
+      // 最後に描画した投稿がサーバー側にある最後の投稿と異なる(=まだ読み込む投稿がある)場合
+      // 一番したの投稿までスクロールした場合に投稿を描画する関数を呼ぶ
+      if (lastRenderedEntryId > response.last_entries_id) {
+        let observer = new IntersectionObserver((entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              observer.unobserve(entry.target);
+              renderEntries()
+            }
+          });
+        }, {
+          rootMargin: '0px',
+          threshold: 1.0
+        });
+        observer.observe(entriesRenderArea.lastChild);
       }
+    }
 
-      // 名前を表示
-      entryCopied.querySelector('[data-role="entryUserNameArea"]').innerText = entry.user_name;
-
-      // 名前のところのリンク先(プロフィール)のURLを設定
-      entryCopied.querySelector('[data-role="entryUserAnchor"]').href = entry.user_profile_url;
-
-      // 投稿日時を表示
-      entryCopied.querySelector('[data-role="entryCreatedAtArea"]').innerText = entry.created_at;
-
-      // 本文を表示 (ここはHTMLなのでinnerHTMLで)
-      entryCopied.querySelector('[data-role="entryBodyArea"]').innerHTML = entry.body;
-
-      // 画像が存在する場合に本文の下部に画像を表示
-      if (entry.image_file_url.length > 0) {
-        const imageElement = new Image();
-        imageElement.src = entry.image_file_url; // 画像URLを設定
-        imageElement.style.display = 'block'; // ブロック要素にする (img要素はデフォルトではインライン要素のため)
-        imageElement.style.marginTop = '1em'; // 画像上部の余白を設定
-        imageElement.style.maxHeight = '300px'; // 画像を表示する最大サイズ(縦)を設定
-        imageElement.style.maxWidth = '300px'; // 画像を表示する最大サイズ(横)を設定
-        entryCopied.querySelector('[data-role="entryBodyArea"]').appendChild(imageElement); // 本文エリアに画像を追加
-      }
-
-      // 最後に実際の描画を行う
-      entriesRenderArea.appendChild(entryCopied);
-    });
+    // 最後に描画した投稿のIDが設定されていればそれをURLクエリパラメータに設定
+    const requestPath = '/timeline_json.php' + (lastRenderedEntryId === null ? '' : '?last_id=' + lastRenderedEntryId.toString());
+    request.open('GET', requestPath, true);
+    request.responseType = 'json';
+    request.send();
   }
-  request.open('GET', '/timeline_json.php', true); // timeline_json.php を叩く
-  request.responseType = 'json';
-  request.send();
-
+  renderEntries();
 
   // 以下画像縮小用
   const imageInput = document.getElementById("imageInput");
